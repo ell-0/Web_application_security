@@ -12,7 +12,7 @@ flowchart LR
 
     subgraph Server["Web Application (trusted)"]
         Auth["Auth & Session Layer"]
-        KDF["Key Derivation\n(Argon2id, per-user salt)"]
+        KDF["Key Derivation\n(PBKDF2-HMAC-SHA256, per-user salt)"]
         Crypto["Vault Encryption/Decryption\n(AES-256-GCM, in memory only)"]
         Routes["Application Routes"]
     end
@@ -39,14 +39,14 @@ flowchart LR
 1. **Browser ↔ Server** — the browser is fully untrusted. Nothing sent from it (form fields, cookies, hidden inputs) is trusted without server-side re-validation. All traffic crosses this boundary over TLS.
 2. **Server ↔ Database** — the app server is trusted to talk to the DB, but the DB itself is treated as an untrusted disk: it never stores plaintext passwords, master passwords, or derived keys — only password *hashes* (for login) and AES-GCM *ciphertext* (for vault entries).
 
-**Where encryption happens:** the master password is submitted once at login over TLS, the server derives a symmetric key from it with Argon2id (never stored), and that key exists only in server memory for the duration of the request/session — it is used to encrypt new vault entries and decrypt existing ones on the fly. The browser only ever receives decrypted entries over the already-encrypted TLS channel; it does no crypto itself in this design.
+**Where encryption happens:** the master password is submitted once at login over TLS, the server derives a symmetric key from it with PBKDF2-HMAC-SHA256 (never stored), and that key exists only in server memory for the duration of the request/session — it is used to encrypt new vault entries and decrypt existing ones on the fly. The browser only ever receives decrypted entries over the already-encrypted TLS channel; it does no crypto itself in this design.
 
 ## 2. Threat Model (mapped to OWASP Top 10 and Weeks 1–4 attack classes)
 
 | # | Threat | OWASP / Class | Intended mitigation |
 |---|--------|----------------|----------------------|
 | 1 | Stolen DB dump reveals vault contents | A02: Cryptographic Failures | Vault entries stored only as AES-256-GCM ciphertext; master password/key never persisted; DB alone is useless without the key |
-| 2 | Weak/guessable master password lets attacker brute-force the key | A02: Cryptographic Failures | Argon2id KDF (slow, memory-hard) with unique per-user salt; minimum password-strength rule at signup |
+| 2 | Weak/guessable master password lets attacker brute-force the key | A02: Cryptographic Failures | PBKDF2-HMAC-SHA256 KDF (600,000 iterations, per OWASP) with unique per-user salt; minimum password-strength rule at signup |
 | 3 | SQL injection via login or vault-entry forms | A03: Injection | All queries via parameterized statements / SQLAlchemy ORM, never string-built SQL |
 | 4 | Stored/reflected XSS (malicious JS in a saved site name or note) | A03: Injection (HTML/JS injection) | Jinja2 auto-escaping on all templates; Content-Security-Policy header; input length/charset validation |
 | 5 | Attacker tampers with hidden form fields or JSON body (e.g. changes `user_id` to view another user's entries) | A01: Broken Access Control / Input tampering | Every query scoped server-side to `session.user_id`, never to a client-supplied ID; ownership re-checked on every read/write |
@@ -64,14 +64,14 @@ flowchart LR
 |-------|--------|-----|
 | Framework | Python + Flask | Small, explicit surface area — good for a first security project because nothing "magic" hides where validation/escaping happens; large ecosystem of well-documented security extensions |
 | Database | SQLite (via SQLAlchemy ORM) | Zero setup, file-based, fine for a course project; SQLAlchemy gives parameterized queries by default, which closes off SQL injection without hand-written escaping |
-| Crypto library | `cryptography` (AES-256-GCM) + `argon2-cffi` (Argon2id KDF) | Both are audited, actively maintained Python libraries recommended over hand-rolled crypto; GCM gives confidentiality **and** integrity (tamper-evident ciphertext) in one primitive |
+| Crypto library | `cryptography` (AES-256-GCM) + stdlib `hashlib.pbkdf2_hmac` (PBKDF2-SHA256 KDF) | `cryptography` is an audited, actively maintained library recommended over hand-rolled crypto; GCM gives confidentiality **and** integrity (tamper-evident ciphertext) in one primitive. PBKDF2 needs no extra native dependency (it's in Python's standard library), which keeps setup simple; `argon2-cffi` is a stronger, memory-hard alternative worth adopting later if the environment supports it |
 | Password hashing (login) | `bcrypt` | Separate from the vault-encryption key derivation — login auth and vault decryption are deliberately different secrets/mechanisms |
 | Session/auth | Flask-Login + Flask's signed session cookies | Well-tested, avoids reinventing session handling |
 | Transport | TLS via a reverse proxy (e.g. Caddy/Nginx in front of Flask) in production; `flask run --cert=adhoc` for local HTTPS testing | Keeps TLS termination out of application code; Caddy auto-provisions certs, simplest path for a student deployment |
 
 ## 4. Cryptographic Design
 
-- **Login secret vs. vault key are different values.** At signup, the master password is (a) hashed with bcrypt and stored as `password_hash` for authentication, and (b) run through Argon2id with a random per-user `kdf_salt` to derive a 256-bit vault key — the salt is stored, the derived key is not.
+- **Login secret vs. vault key are different values.** At signup, the master password is (a) hashed with bcrypt and stored as `password_hash` for authentication, and (b) run through PBKDF2-HMAC-SHA256 (600,000 iterations) with a random per-user `kdf_salt` to derive a 256-bit vault key — the salt is stored, the derived key is not.
 - **What the server does:** on each authenticated request that touches the vault, the server re-derives the key from the master password held only in the current session's memory (never written to disk or logs), and uses it to AES-GCM-encrypt/decrypt individual vault entries.
 - **What the database stores:** `email`, `password_hash`, `kdf_salt` for the user; and per entry, `site`, `username` (plaintext, needed for search/display), plus `ciphertext` and `nonce` for the secret (the actual saved password). The encrypted value's GCM authentication tag also means a tampered ciphertext fails to decrypt rather than silently returning garbage.
 
