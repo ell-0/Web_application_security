@@ -4,7 +4,7 @@ Web app: login with master password, store encrypted site/username/password entr
 
 ## Scope (Checkpoint 1)
 
-Design + repo setup only. No working app yet.
+Design + repo setup only. App will appear at the furthest checkpoints.
 
 ## Planned routes
 
