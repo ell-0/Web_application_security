@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% from "_field.html" import field %}
+{% block title %}Sign up{% endblock %}
+{% block content %}
+<h1>Create account</h1>
+<form method="post" novalidate>
+  {{ form.hidden_tag() }}  {# hidden CSRF token #}
+  {{ field(form.email, autocomplete="email") }}
+  {{ field(form.password, autocomplete="new-password") }}
+  {{ field(form.confirm, autocomplete="new-password") }}
+  <button type="submit">Sign up</button>
+</form>
+<p class="hint">Your master password can't be recovered — if you forget it, your saved passwords are lost.</p>
+{% endblock %}

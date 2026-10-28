@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% from "_field.html" import field %}
+{% block title %}Log in{% endblock %}
+{% block content %}
+<h1>Log in</h1>
+<form method="post" novalidate>
+  {{ form.hidden_tag() }}  {# hidden CSRF token #}
+  {{ field(form.email, autocomplete="email") }}
+  {{ field(form.password, autocomplete="current-password") }}
+  <button type="submit">Log in</button>
+</form>
+{% endblock %}

@@ -1,0 +1,7 @@
+{# Renders one form field with its label and any error messages #}
+{% macro field(f) %}
+  <label>{{ f.label.text }}
+    {{ f(**kwargs) }}
+  </label>
+  {% for error in f.errors %}<p class="error">{{ error }}</p>{% endfor %}
+{% endmacro %}
