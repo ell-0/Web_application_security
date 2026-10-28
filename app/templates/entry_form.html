@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% from "_field.html" import field %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<h1>{{ title }}</h1>
+<form method="post" novalidate>
+  {{ form.hidden_tag() }}  {# hidden CSRF token #}
+  {{ field(form.site) }}
+  {{ field(form.username, autocomplete="off") }}
+  {{ field(form.password, autocomplete="new-password",
+           placeholder="Leave empty to keep the current password" if editing else "") }}
+  <button type="submit">Save</button>
+</form>
+<p><a href="{{ url_for('vault.list_entries') }}">← Back to vault</a></p>
+{% endblock %}

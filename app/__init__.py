@@ -7,8 +7,8 @@ import os
 import secrets
 from datetime import timedelta
 
-from flask import Flask, redirect, render_template, url_for
-from flask_login import LoginManager, current_user, login_required
+from flask import Flask, redirect, url_for
+from flask_login import LoginManager, current_user
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf import CSRFProtect
 
@@ -48,8 +48,10 @@ def create_app() -> Flask:
 
     from . import models  # noqa: F401 — registers the tables
     from .auth import bp as auth_bp
+    from .vault import bp as vault_bp
 
     app.register_blueprint(auth_bp)
+    app.register_blueprint(vault_bp)
 
     with app.app_context():
         db.create_all()   # creates the tables if they don't exist yet
@@ -57,13 +59,7 @@ def create_app() -> Flask:
     @app.route("/")
     def index():
         if current_user.is_authenticated:
-            return redirect(url_for("home"))
+            return redirect(url_for("vault.list_entries"))
         return redirect(url_for("auth.login"))
-
-    @app.route("/home")
-    @login_required
-    def home():
-        # temporary page — replaced by the vault in the next step
-        return render_template("home.html")
 
     return app

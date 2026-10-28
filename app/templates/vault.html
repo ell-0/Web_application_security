@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}My vault{% endblock %}
+{% block content %}
+<div class="row">
+  <h1>My vault</h1>
+  <a class="button" href="{{ url_for('vault.new_entry') }}">+ Add entry</a>
+</div>
+
+{% if entries %}
+<table>
+  <thead><tr><th>Site</th><th>Username</th><th></th></tr></thead>
+  <tbody>
+  {% for e in entries %}
+    <tr>
+      <td>{{ e.site }}</td>
+      <td>{{ e.username }}</td>
+      <td><a href="{{ url_for('vault.view_entry', entry_id=e.id) }}">Open</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="hint">No entries yet.</p>
+{% endif %}
+{% endblock %}

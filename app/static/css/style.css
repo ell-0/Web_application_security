@@ -12,3 +12,11 @@ button { padding: 8px 14px; font-size: 1rem; border: 0; border-radius: 6px;
 .flash { background: #fff7d6; border: 1px solid #e6cf6e; padding: 8px 12px; border-radius: 6px; }
 .error { color: #b91c1c; margin: 0; font-size: .9rem; }
 .hint { color: #666; font-size: .9rem; }
+.row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+a.button { padding: 8px 14px; border-radius: 6px; background: #2563eb; color: #fff; text-decoration: none; }
+button.danger { background: #b91c1c; }
+table { width: 100%; border-collapse: collapse; background: #fff; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #e5e7eb; }
+dt { font-weight: 600; margin-top: 12px; }
+dd { margin: 4px 0 0 0; }
+code { background: #eef; padding: 2px 6px; border-radius: 4px; font-size: 1rem; }
