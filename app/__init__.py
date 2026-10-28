@@ -1,4 +1,16 @@
-# App package placeholder.
-# Implementation (routes, models, crypto helpers) starts next checkpoint.
-# See docs/DESIGN.md for the planned architecture, and README.md for the
-# planned route list.
+"""
+App factory: builds the Flask app.
+Later steps will plug in the database, login and vault routes here.
+"""
+
+from flask import Flask
+
+
+def create_app() -> Flask:
+    app = Flask(__name__)
+
+    @app.route("/")
+    def index():
+        return "Secure Password Manager is running."
+
+    return app
