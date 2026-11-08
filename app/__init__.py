@@ -34,10 +34,11 @@ CSP = (
 )
 
 
-def create_app() -> Flask:
-    # instance_relative_config: the "instance/" folder (git-ignored)
-    # holds private runtime files, like the database and the security log
-    app = Flask(__name__, instance_relative_config=True)
+def create_app(instance_path: str | None = None) -> Flask:
+    # instance_path: normally None = the "instance/" folder (git-ignored),
+    # which holds the database and the security log. The tests pass a
+    # temporary folder here, so they never touch the real database.
+    app = Flask(__name__, instance_relative_config=True, instance_path=instance_path)
     os.makedirs(app.instance_path, exist_ok=True)
 
     app.config.update(
