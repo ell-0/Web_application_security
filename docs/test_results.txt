@@ -1,0 +1,27 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.11.7, pytest-9.2.0, pluggy-1.7.0 -- /Users/ell/Downloads/TALTECH/Web App Sec/ProjectsCheckpoints/venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/ell/Downloads/TALTECH/Web App Sec/ProjectsCheckpoints
+collecting ... collected 19 items
+
+tests/test_security.py::test_sqli_login_bypass_fails[' OR '1'='1] PASSED [  5%]
+tests/test_security.py::test_sqli_login_bypass_fails[' OR 1=1 --] PASSED [ 10%]
+tests/test_security.py::test_sqli_login_bypass_fails[admin'--] PASSED    [ 15%]
+tests/test_security.py::test_sqli_login_bypass_fails['; DROP TABLE users; --] PASSED [ 21%]
+tests/test_security.py::test_sqli_login_bypass_fails[" OR ""="] PASSED   [ 26%]
+tests/test_security.py::test_sqli_payload_stored_as_plain_text[' OR '1'='1] PASSED [ 31%]
+tests/test_security.py::test_sqli_payload_stored_as_plain_text[' OR 1=1 --] PASSED [ 36%]
+tests/test_security.py::test_sqli_payload_stored_as_plain_text[admin'--] PASSED [ 42%]
+tests/test_security.py::test_sqli_payload_stored_as_plain_text['; DROP TABLE users; --] PASSED [ 47%]
+tests/test_security.py::test_sqli_payload_stored_as_plain_text[" OR ""="] PASSED [ 52%]
+tests/test_security.py::test_sqli_in_url_is_rejected PASSED              [ 57%]
+tests/test_security.py::test_xss_payload_is_escaped PASSED               [ 63%]
+tests/test_security.py::test_csp_header_present PASSED                   [ 68%]
+tests/test_security.py::test_other_user_cannot_read_edit_or_delete_entry PASSED [ 73%]
+tests/test_security.py::test_logged_out_user_cannot_open_vault PASSED    [ 78%]
+tests/test_security.py::test_post_without_csrf_token_is_rejected PASSED  [ 84%]
+tests/test_security.py::test_404_page_leaks_nothing PASSED               [ 89%]
+tests/test_security.py::test_crash_shows_generic_page_and_is_logged PASSED [ 94%]
+tests/test_security.py::test_log_is_json_and_contains_no_secrets PASSED  [100%]
+
+============================== 19 passed in 8.58s ==============================
