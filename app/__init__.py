@@ -1,6 +1,7 @@
 """
 App factory: builds the Flask app and plugs in
-config, database, login handling, CSRF protection, error pages and logging.
+config, database, login handling, CSRF protection, security headers,
+error pages and logging.
 """
 
 import logging
@@ -18,6 +19,19 @@ from werkzeug.exceptions import HTTPException
 db = SQLAlchemy()
 login_manager = LoginManager()
 csrf = CSRFProtect()
+
+# Content Security Policy: the browser only runs scripts/styles from our own
+# server. Second layer against XSS, in case escaping ever fails.
+CSP = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self'; "
+    "img-src 'self'; "
+    "object-src 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self'; "
+    "frame-ancestors 'none'"
+)
 
 
 def create_app() -> Flask:
@@ -65,12 +79,18 @@ def create_app() -> Flask:
             return redirect(url_for("vault.list_entries"))
         return redirect(url_for("auth.login"))
 
+    # --- security headers on EVERY response ---
+    @app.after_request
+    def security_headers(response):
+        response.headers["Content-Security-Policy"] = CSP
+        return response
+
     # --- structured security logging (JSON lines in instance/security.log) ---
     from . import security_log
     security_log.setup(app)
 
     # --- secure error handling: generic page for the user, details in the log ---
-    ERROR_MESSAGES = {
+    error_messages = {
         400: "Bad request.",
         401: "Please log in.",
         403: "Access denied.",
@@ -80,7 +100,7 @@ def create_app() -> Flask:
     }
 
     @app.errorhandler(CSRFError)
-    def csrf_error(e):
+    def csrf_error(_e):
         security_log.log_event("csrf_failed", logging.WARNING)
         return render_template("error.html", code=400,
                                message="Your form expired. Please try again."), 400
@@ -90,7 +110,7 @@ def create_app() -> Flask:
         if e.code in (403, 404):
             security_log.log_event("not_found_or_denied", logging.WARNING, code=e.code)
         return render_template("error.html", code=e.code,
-                               message=ERROR_MESSAGES.get(e.code, "Something went wrong.")), e.code
+                               message=error_messages.get(e.code, "Something went wrong.")), e.code
 
     @app.errorhandler(Exception)
     def unexpected_error(e):
