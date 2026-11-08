@@ -1,16 +1,19 @@
 """
 App factory: builds the Flask app and plugs in
-config, database, login handling, CSRF protection and routes.
+config, database, login handling, CSRF protection, error pages and logging.
 """
 
+import logging
 import os
 import secrets
 from datetime import timedelta
 
-from flask import Flask, redirect, url_for
+from flask import Flask, redirect, render_template, url_for
 from flask_login import LoginManager, current_user
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf import CSRFProtect
+from flask_wtf.csrf import CSRFError
+from werkzeug.exceptions import HTTPException
 
 db = SQLAlchemy()
 login_manager = LoginManager()
@@ -19,7 +22,7 @@ csrf = CSRFProtect()
 
 def create_app() -> Flask:
     # instance_relative_config: the "instance/" folder (git-ignored)
-    # holds private runtime files, like the database
+    # holds private runtime files, like the database and the security log
     app = Flask(__name__, instance_relative_config=True)
     os.makedirs(app.instance_path, exist_ok=True)
 
@@ -61,5 +64,40 @@ def create_app() -> Flask:
         if current_user.is_authenticated:
             return redirect(url_for("vault.list_entries"))
         return redirect(url_for("auth.login"))
+
+    # --- structured security logging (JSON lines in instance/security.log) ---
+    from . import security_log
+    security_log.setup(app)
+
+    # --- secure error handling: generic page for the user, details in the log ---
+    ERROR_MESSAGES = {
+        400: "Bad request.",
+        401: "Please log in.",
+        403: "Access denied.",
+        404: "Page not found.",
+        405: "Method not allowed.",
+        413: "Request too large.",
+    }
+
+    @app.errorhandler(CSRFError)
+    def csrf_error(e):
+        security_log.log_event("csrf_failed", logging.WARNING)
+        return render_template("error.html", code=400,
+                               message="Your form expired. Please try again."), 400
+
+    @app.errorhandler(HTTPException)
+    def http_error(e):
+        if e.code in (403, 404):
+            security_log.log_event("not_found_or_denied", logging.WARNING, code=e.code)
+        return render_template("error.html", code=e.code,
+                               message=ERROR_MESSAGES.get(e.code, "Something went wrong.")), e.code
+
+    @app.errorhandler(Exception)
+    def unexpected_error(e):
+        # full stack trace goes to the log; the user only sees a generic page
+        security_log.log_event("server_error", logging.ERROR, exc_info=True,
+                               error_type=type(e).__name__)
+        return render_template("error.html", code=500,
+                               message="Something went wrong."), 500
 
     return app

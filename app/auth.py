@@ -2,11 +2,13 @@
 Authentication: signup, login, logout, and session checks.
 """
 
+import logging
+
 import bcrypt
 from flask import Blueprint, flash, redirect, render_template, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
-from . import db, keystore, login_manager
+from . import db, keystore, login_manager, security_log
 from .crypto import derive_key, generate_salt
 from .forms import LoginForm, SignupForm
 from .models import User
@@ -31,6 +33,7 @@ def check_vault_session():
     If it expired (idle/absolute timeout or server restart) -> log out."""
     if current_user.is_authenticated:
         if keystore.get(session.get("vault_token"), current_user.id) is None:
+            security_log.log_event("session_expired")
             logout_user()
             session.clear()
             flash("Your session expired. Please log in again.")
@@ -56,6 +59,7 @@ def signup():
         )
         db.session.add(user)
         db.session.commit()
+        security_log.log_event("signup", new_user_id=user.id)
         flash("Account created. Please log in.")
         return redirect(url_for("auth.login"))
     return render_template("signup.html", form=form)
@@ -77,6 +81,8 @@ def login():
 
         if user is None or not password_ok:
             # same message for "no such user" and "wrong password"
+            # log the email that was tried — NEVER the password
+            security_log.log_event("login_failed", logging.WARNING, email=email)
             flash("Invalid email or password.")
             return render_template("login.html", form=form)
 
@@ -84,6 +90,7 @@ def login():
         session.clear()                 # throw away the old session (fixation)
         login_user(user, remember=False)
         session.permanent = True        # applies the 8-hour lifetime
+        security_log.log_event("login_success")
 
         # derive the vault key from the master password and keep it in
         # server memory only; the cookie gets just a random token
@@ -97,6 +104,7 @@ def login():
 @bp.route("/logout", methods=["POST"])
 @login_required
 def logout():
+    security_log.log_event("logout")            # before logout, so user_id is still known
     keystore.drop(session.get("vault_token"))  # forget the vault key
     logout_user()
     session.clear()

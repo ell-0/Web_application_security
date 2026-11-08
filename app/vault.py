@@ -8,13 +8,16 @@ Security rules used in every route:
     the URL (Broken Access Control / IDOR).
   - Passwords are encrypted with the user's vault key before saving and
     decrypted only when the user opens that one entry.
+  - Security events are written to the structured log (security_log.py).
 """
+
+import logging
 
 from cryptography.exceptions import InvalidTag
 from flask import Blueprint, abort, flash, redirect, render_template, session, url_for
 from flask_login import current_user, login_required
 
-from . import db, keystore
+from . import db, keystore, security_log
 from .crypto import decrypt, encrypt
 from .forms import DeleteForm, EntryForm
 from .models import VaultEntry
@@ -35,6 +38,8 @@ def get_own_entry(entry_id: int) -> VaultEntry:
     (404 instead of 403, so others can't even learn the entry exists.)"""
     entry = VaultEntry.query.filter_by(id=entry_id, user_id=current_user.id).first()
     if entry is None:
+        # someone tried an id that isn't theirs (or doesn't exist) — possible IDOR attempt
+        security_log.log_event("access_denied", logging.WARNING, entry_id=entry_id)
         abort(404)
     return entry
 
@@ -74,6 +79,7 @@ def new_entry():
         )
         db.session.add(entry)
         db.session.commit()
+        security_log.log_event("entry_created", entry_id=entry.id)
         flash("Entry saved.")
         return redirect(url_for("vault.list_entries"))
     return render_template("entry_form.html", form=form, title="Add entry")
@@ -86,7 +92,8 @@ def view_entry(entry_id):
     try:
         password = decrypt(current_key(), entry.nonce, entry.ciphertext)
     except InvalidTag:
-        # wrong key or tampered ciphertext — show a generic message, no details
+        # wrong key or tampered ciphertext — log it, show a generic message, no details
+        security_log.log_event("decrypt_failed", logging.ERROR, entry_id=entry_id)
         password = None
         flash("This entry could not be decrypted.")
     return render_template("entry_view.html", entry=entry, password=password,
@@ -105,6 +112,7 @@ def edit_entry(entry_id):
             # new nonce every time we encrypt — never reuse one
             entry.nonce, entry.ciphertext = encrypt(current_key(), form.password.data)
         db.session.commit()
+        security_log.log_event("entry_updated", entry_id=entry.id)
         flash("Entry updated.")
         return redirect(url_for("vault.view_entry", entry_id=entry.id))
     return render_template("entry_form.html", form=form, title="Edit entry", editing=True)
@@ -119,5 +127,6 @@ def delete_entry(entry_id):
     entry = get_own_entry(entry_id)
     db.session.delete(entry)
     db.session.commit()
+    security_log.log_event("entry_deleted", entry_id=entry_id)
     flash("Entry deleted.")
     return redirect(url_for("vault.list_entries"))
