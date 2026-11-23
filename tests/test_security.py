@@ -23,7 +23,10 @@ PASSWORD = "correct-horse-battery"   # master password for test users
 
 @pytest.fixture
 def app(tmp_path):
-    """A fresh app whose database and security.log live in a temp folder."""
+    """A fresh app whose database and security.log live in a temp folder,
+    with an empty login-failure counter."""
+    from app import ratelimit
+    ratelimit.clear()
     return create_app(instance_path=str(tmp_path))
 
 
@@ -240,3 +243,20 @@ def test_log_is_json_and_contains_no_secrets(client, tmp_path):
     assert "entry_created" in events
     for secret in (PASSWORD, "wrong-password-123", "vault-secret-xyz"):
         assert secret not in text
+
+
+# ============================================================ BRUTE FORCE
+
+def test_login_brute_force_is_blocked(client, tmp_path):
+    """Attack: guess the password many times. After 5 failures the account
+    is blocked — even the CORRECT password is refused."""
+    signup(client, "alice@test.com")
+    for i in range(5):
+        r = login(client, "alice@test.com", f"wrong-guess-{i}")
+        assert b"Invalid email or password." in r.data
+
+    r = login(client, "alice@test.com")            # correct password
+    assert r.status_code == 429
+    assert b"Too many failed login attempts" in r.data
+    assert client.get("/vault/").status_code == 302   # still not logged in
+    assert "login_blocked" in (tmp_path / "security.log").read_text()

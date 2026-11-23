@@ -5,10 +5,10 @@ Authentication: signup, login, logout, and session checks.
 import logging
 
 import bcrypt
-from flask import Blueprint, flash, redirect, render_template, session, url_for
+from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
-from . import db, keystore, login_manager, security_log
+from . import db, keystore, login_manager, ratelimit, security_log
 from .crypto import derive_key, generate_salt
 from .forms import LoginForm, SignupForm
 from .models import User
@@ -74,6 +74,15 @@ def login():
     if form.validate_on_submit():
         email = form.email.data.strip().lower()
         password = form.password.data
+        ip = request.remote_addr or "unknown"
+
+        # brute-force protection: refuse BEFORE checking the password,
+        # so a blocked attacker learns nothing — same for unknown emails
+        if ratelimit.is_blocked(email, ip):
+            security_log.log_event("login_blocked", logging.WARNING, email=email)
+            flash("Too many failed login attempts. Please try again in 15 minutes.")
+            return render_template("login.html", form=form), 429
+
         user = User.query.filter_by(email=email).first()
 
         stored_hash = user.password_hash.encode("ascii") if user else DUMMY_HASH
@@ -82,11 +91,13 @@ def login():
         if user is None or not password_ok:
             # same message for "no such user" and "wrong password"
             # log the email that was tried — NEVER the password
+            ratelimit.record_failure(email, ip)
             security_log.log_event("login_failed", logging.WARNING, email=email)
             flash("Invalid email or password.")
             return render_template("login.html", form=form)
 
         # --- successful login ---
+        ratelimit.reset(email)          # forget earlier typos for this account
         session.clear()                 # throw away the old session (fixation)
         login_user(user, remember=False)
         session.permanent = True        # applies the 8-hour lifetime
